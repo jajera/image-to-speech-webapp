@@ -52,8 +52,12 @@ speechSynthesis.onvoiceschanged = populateVoices;
 
 function speakText() {
   try {
-    const text = output.textContent.trim();
-    if (!text) {
+    if (!output || !output.textContent) {
+      alert("No text to speak. Output element missing or empty.");
+      return;
+    }
+    const rawText = output.textContent.trim();
+    if (!rawText) {
       alert("No text to speak.");
       return;
     }
@@ -65,14 +69,26 @@ function speakText() {
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.voice = voices[index];
-    utterance.rate = Math.min(2, Math.max(0.5, parseFloat(rateInput.value)));
-    utterance.pitch = Math.min(2, Math.max(0, parseFloat(pitchInput.value)));
-    speechSynthesis.speak(utterance);
+    speechSynthesis.cancel();
+
+    const cleanedText = rawText
+      .replace(/[ \t]+/g, ' ')                      // collapse multiple spaces/tabs
+      .replace(/[\r\n]+(?=\S)/g, ' ')              // merge lines unless separated by punctuation
+      .replace(/(\S)-\s+/g, '$1')                   // join hyphenated line breaks
+      .trim();
+
+    const utterances = cleanedText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanedText];
+
+    utterances.forEach((sentence) => {
+      const utterance = new SpeechSynthesisUtterance(sentence.trim());
+      utterance.voice = voices[index];
+      utterance.rate = Math.min(2, Math.max(0.5, parseFloat(rateInput.value)));
+      utterance.pitch = Math.min(2, Math.max(0, parseFloat(pitchInput.value)));
+      speechSynthesis.speak(utterance);
+    });
   } catch (err) {
-    console.error("Error during speech synthesis:", err);
-    alert("Unable to speak text.");
+    console.error("Speech synthesis failed:", err.message || err);
+    alert(`Unable to speak text.\n\n${err.message || err}`);
   }
 }
 
@@ -157,3 +173,10 @@ function handleImage(file) {
 
   reader.readAsDataURL(file);
 }
+
+// Shortcut keys
+window.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.key === "Enter") speakText();
+  if (e.ctrlKey && e.key === "Backspace") stopSpeaking();
+  if (e.ctrlKey && e.key.toLowerCase() === "c") clearText();
+});
